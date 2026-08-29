@@ -100,6 +100,31 @@ async function orderApi(request, env) {
   return json({ ok: true, order: { id: orderId, total, status: 'pending' } }, 201);
 }
 
+async function paymentConfirmApi(request, env) {
+  const user = await currentUser(request, env); if (!user) return json({ error: '로그인이 필요합니다.' }, 401);
+  if (!env.TOSS_SECRET_KEY) return json({ error: '결제 설정이 완료되지 않았습니다.' }, 503);
+  const body = await requestJson(request) || {}; const paymentKey = String(body.paymentKey || ''); const orderId = String(body.orderId || ''); const amount = Number(body.amount);
+  if (!paymentKey || !orderId || !Number.isInteger(amount) || amount < 0) return json({ error: '결제 정보가 올바르지 않습니다.' }, 400);
+  const order = await env.DB.prepare('SELECT id, total, status FROM orders WHERE id=? AND user_id=?').bind(orderId, user.id).first();
+  if (!order) return json({ error: '주문을 찾을 수 없습니다.' }, 404);
+  if (order.status === 'paid') return json({ error: '이미 결제 완료된 주문입니다.' }, 409);
+  if (order.total !== amount) return json({ error: '결제 금액이 주문 금액과 다릅니다.' }, 400);
+  const auth = btoa(`${env.TOSS_SECRET_KEY}:`);
+  const toss = await fetch('https://api.tosspayments.com/v1/payments/confirm', { method: 'POST', headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ paymentKey, orderId, amount }) });
+  const result = await toss.json().catch(() => ({}));
+  if (!toss.ok) return json({ error: result.message || '결제 승인에 실패했습니다.', code: result.code || 'PAYMENT_FAILED' }, toss.status >= 500 ? 502 : 400);
+  await env.DB.prepare("UPDATE orders SET status='paid', payment_key=?, payment_method=?, approved_at=datetime('now') WHERE id=? AND user_id=? AND status='pending'").bind(paymentKey, result.method || null, orderId, user.id).run();
+  return json({ ok: true, payment: { orderId, paymentKey, status: 'paid', method: result.method || null } });
+}
+
+async function orderDetailApi(request, env, orderId) {
+  const user = await currentUser(request, env); if (!user) return json({ error: '로그인이 필요합니다.' }, 401);
+  const order = await env.DB.prepare('SELECT id, total, status, payment_method, approved_at, created_at FROM orders WHERE id=? AND user_id=?').bind(orderId, user.id).first();
+  if (!order) return json({ error: '주문을 찾을 수 없습니다.' }, 404);
+  const items = await env.DB.prepare('SELECT oi.product_id, oi.qty, oi.price, p.name, p.image_url AS image FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE oi.order_id=? ORDER BY oi.id').bind(orderId).all();
+  return json({ order: { ...order, items: items.results } });
+}
+
 async function productsFromD1(env) {
   if (!env.DB) return products;
   await env.DB.batch(products.map(p => env.DB.prepare('INSERT OR IGNORE INTO products (id, name, price, description, category_id, image_url) VALUES (?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?)').bind(p.id, p.name, p.price, p.description, p.category, p.image)));
@@ -107,4 +132,4 @@ async function productsFromD1(env) {
   return result.results;
 }
 
-export default { async fetch(request, env) { const url = new URL(request.url); const isAsset = /\.(?:svg|png|jpg|jpeg|webp|gif)$/i.test(url.pathname); if (isAsset && env.ASSETS) return env.ASSETS.fetch(request); if (url.pathname.startsWith('/api/auth/')) return authApi(request, env, url); if (url.pathname === '/api/orders' && request.method === 'POST') return orderApi(request, env); if (url.pathname === '/api/products') { try { return Response.json(await productsFromD1(env), { headers: { 'cache-control': 'no-store' } }); } catch (error) { return Response.json({ error: '상품 데이터를 불러오지 못했습니다.' }, { status: 500 }); } } try { const dbProducts = await productsFromD1(env); const dbHtml = html.replace(JSON.stringify(products), JSON.stringify(dbProducts)); return new Response(dbHtml.replace('</body>', '<script src="/app.js?v=6"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } catch (error) { return new Response(html.replace('</body>', '<script src="/app.js?v=6"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } } };
+export default { async fetch(request, env) { const url = new URL(request.url); const isAsset = /\.(?:svg|png|jpg|jpeg|webp|gif)$/i.test(url.pathname); if (isAsset && env.ASSETS) return env.ASSETS.fetch(request); if (url.pathname.startsWith('/api/auth/')) return authApi(request, env, url); if (url.pathname === '/api/payments/config' && request.method === 'GET') return json({ clientKey: env.TOSS_CLIENT_KEY || '' }); if (url.pathname === '/api/payments/confirm' && request.method === 'POST') return paymentConfirmApi(request, env); if (url.pathname === '/api/orders' && request.method === 'POST') return orderApi(request, env); if (url.pathname.startsWith('/api/orders/') && request.method === 'GET') return orderDetailApi(request, env, decodeURIComponent(url.pathname.split('/')[3] || '')); if (url.pathname === '/api/products') { try { return Response.json(await productsFromD1(env), { headers: { 'cache-control': 'no-store' } }); } catch (error) { return Response.json({ error: '상품 데이터를 불러오지 못했습니다.' }, { status: 500 }); } } try { const dbProducts = await productsFromD1(env); const dbHtml = html.replace(JSON.stringify(products), JSON.stringify(dbProducts)); return new Response(dbHtml.replace('</body>', '<script src="/app.js?v=7"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } catch (error) { return new Response(html.replace('</body>', '<script src="/app.js?v=7"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } } };
