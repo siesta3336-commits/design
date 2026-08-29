@@ -64,7 +64,7 @@ async function englishDescriptionApi(request, env) {
   const body = await requestJson(request) || {}; const name = String(body.name || '').trim(); const description = String(body.description || '').trim();
   if (!name || !description || name.length > 200 || description.length > 1000) return json({ error: '상품 정보가 올바르지 않습니다.' }, 400);
   try {
-    const result = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', { messages: [{ role: 'system', content: 'You write concise, natural English product copy for international shoppers. Do not invent specifications, prices, brands, certifications, or guarantees. Use only the supplied product name and description. Return one polished paragraph of 2-3 sentences.' }, { role: 'user', content: `Product name: ${name}\nDescription: ${description}` }], max_tokens: 180, temperature: 0.7 });
+    const result = await env.AI.run('@cf/meta/llama-3.2-3b-instruct', { prompt: `Write a concise, natural English product introduction for international shoppers in 2-3 sentences. Do not invent specifications, prices, brands, certifications, or guarantees. Use only the supplied information.\n\nProduct name: ${name}\nDescription: ${description}`, max_tokens: 180, temperature: 0.7 });
     const text = String(result?.response || '').trim(); if (!text) throw new Error('empty AI response'); return json({ description: text });
   } catch (error) { console.error('Workers AI error', error); return json({ error: '영어 상품 소개를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.' }, 502); }
 }
