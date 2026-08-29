@@ -77,7 +77,7 @@ async function authApi(request, env, url) {
   const body = await requestJson(request) || {};
   if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase(); const name = String(body.name || '').trim(); const password = String(body.password || '');
-    if (!email.includes('@') || email.length > 254 || !name || name.length > 80 || password.length < 8 || password.length > 128) return json({ error: '이메일·이름·비밀번호 형식을 확인해 주세요.' }, 400);
+    if (!email.includes('@') || email.length > 254 || /[<>"'`]/.test(email) || !name || name.length > 80 || /[<>"'`]/.test(name) || password.length < 8 || password.length > 128) return json({ error: '이메일·이름·비밀번호 형식을 확인해 주세요.' }, 400);
     try { const stored = await hashPassword(password); const result = await env.DB.prepare('INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)').bind(email, stored, name).run(); return json({ ok: true, user: { id: result.meta.last_row_id, email, name } }, 201); }
     catch (error) { console.error('signup failed', error); const duplicate = String(error && error.message).toUpperCase().includes('UNIQUE'); return json({ error: duplicate ? '이미 가입된 이메일입니다.' : '회원가입 처리 중 오류가 발생했습니다.' }, duplicate ? 409 : 500); }
   }
