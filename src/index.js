@@ -36,8 +36,8 @@ const toToken = bytes => toHex(bytes);
 async function digest(value) { return new Uint8Array(await crypto.subtle.digest('SHA-256', textEncoder.encode(value))); }
 async function hashPassword(password, salt = crypto.getRandomValues(new Uint8Array(16))) {
   const key = await crypto.subtle.importKey('raw', textEncoder.encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256));
-  return `pbkdf2$120000$${toHex(salt)}$${toHex(bits)}`;
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256));
+  return `pbkdf2$100000$${toHex(salt)}$${toHex(bits)}`;
 }
 async function verifyPassword(password, encoded) {
   const [, iterations, saltText, expectedText] = String(encoded || '').split('$');
