@@ -60,14 +60,13 @@ async function currentUser(request, env) {
 async function requestJson(request) { try { return await request.json(); } catch { return null; } }
 function json(data, status = 200, headers = {}) { return Response.json(data, { status, headers }); }
 async function englishDescriptionApi(request, env) {
-  if (!env.gemini_API_key) return json({ error: 'Gemini API 키가 설정되지 않았습니다.' }, 503);
+  if (!env.AI) return json({ error: 'Workers AI가 연결되지 않았습니다.' }, 503);
   const body = await requestJson(request) || {}; const name = String(body.name || '').trim(); const description = String(body.description || '').trim();
   if (!name || !description || name.length > 200 || description.length > 1000) return json({ error: '상품 정보가 올바르지 않습니다.' }, 400);
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${encodeURIComponent(env.gemini_API_key)}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: `Write a concise, natural English product introduction for international shoppers in 2-3 sentences. Do not invent specifications, prices, brands, certifications, or guarantees. Use only the supplied information.\n\nProduct name: ${name}\nDescription: ${description}` }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 180 } }) });
-    const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result?.error?.message || 'Gemini request failed');
-    const text = String(result?.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '').trim(); if (!text) throw new Error('empty Gemini response'); return json({ description: text });
-  } catch (error) { console.error('Gemini API error', error); return json({ error: '영어 상품 소개를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.' }, 502); }
+    const result = await env.AI.run('@cf/meta/llama-3.2-3b-instruct', { prompt: `Write a natural English product introduction in no more than 2 short sentences (35 words maximum) for international shoppers. Do not invent any facts. Use only this information.\n\nProduct name: ${name}\nDescription: ${description}`, max_tokens: 70, temperature: 0.6 });
+    const text = String(result?.response || '').replace(/\s*\n\s*/g, ' ').trim(); if (!text) throw new Error('empty Workers AI response'); return json({ description: text });
+  } catch (error) { console.error('Workers AI error', error); return json({ error: '영어 상품 소개를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.' }, 502); }
 }
 async function authApi(request, env, url) {
   if (!env.DB) return json({ error: '데이터베이스가 연결되지 않았습니다.' }, 503);
