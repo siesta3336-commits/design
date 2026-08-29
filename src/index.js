@@ -71,9 +71,16 @@ async function englishDescriptionApi(request, env) {
     if (!text) throw new Error('empty Workers AI response'); return json({ description: text });
   } catch (error) { console.error('Workers AI error', error); return json({ error: '영어 상품 소개를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.' }, 502); }
 }
+async function shoppingChatApi(request, env) {
+  if (!env.AI) return json({ error: 'AI 도움말을 사용할 수 없습니다.' }, 503);
+  const body = await requestJson(request) || {}; const message = String(body.message || '').trim(); const history = Array.isArray(body.history) ? body.history.slice(-6).filter(item => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string').map(item => ({ role: item.role, content: item.content.slice(0, 1000) })) : [];
+  if (!message || message.length > 1000) return json({ error: '질문은 1,000자 이내로 입력해 주세요.' }, 400);
+  try { const result = await env.AI.run('@cf/meta/llama-3.2-3b-instruct', { messages: [{ role: 'system', content: 'You are a helpful Korean shopping assistant for INU. Answer in Korean, briefly and naturally. Only explain browsing products, categories, product details, cart, orders, login, and payment status. Never invent product facts, prices, stock, delivery dates, refunds, or policies. If unknown, say you do not know and suggest checking the product page.' }, ...history, { role: 'user', content: message }], max_tokens: 180, temperature: 0.4 }); const text = String(result?.response || '').replace(/\s*\n\s*/g, ' ').trim(); if (!text) throw new Error('empty response'); return json({ answer: text }); } catch (error) { console.error('Shopping AI error', error); return json({ error: '잠시 후 다시 시도해 주세요.' }, 502); }
+}
 async function authApi(request, env, url) {
   if (!env.DB) return json({ error: '데이터베이스가 연결되지 않았습니다.' }, 503);
   if (url.pathname === '/api/auth/english' && request.method === 'POST') return englishDescriptionApi(request, env);
+  if (url.pathname === '/api/auth/chat' && request.method === 'POST') return shoppingChatApi(request, env);
   const body = await requestJson(request) || {};
   if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase(); const name = String(body.name || '').trim(); const password = String(body.password || '');
