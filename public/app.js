@@ -16,6 +16,6 @@
   function protect() { if (location.hash === '#/cart' && !me) { showAuth('login'); location.hash = '#/'; } if (location.hash === '#/mypage') renderMyPage(); }
   const originalAdd = window.add; window.add = function (id) { if (!me) return showAuth('login'); return originalAdd(id); };
   const originalOrder = window.order; window.order = async function () { if (!me) return showAuth('login'); const items = Object.entries(cart).map(([product_id, qty]) => ({ product_id, qty })); try { const data = await api('/api/orders', { method: 'POST', body: JSON.stringify({ items }) }); localStorage.removeItem('cart'); cart = {}; document.getElementById('app').innerHTML = header() + `<main class="cart"><h1>주문 완료</h1><div class="items"><div class="empty"><p>주문이 접수되었습니다.</p><p>주문 번호: ${data.order.id}</p></div></div></main>`; } catch (error) { alert(error.message); } };
-  window.addEventListener('hashchange', protect); window.addEventListener('hashchange', refresh); loadMe().then(() => { refresh(); protect(); });
+  window.addEventListener('hashchange', () => { if (location.hash === '#/signup') showAuth('signup'); }); window.addEventListener('hashchange', protect); window.addEventListener('hashchange', refresh); loadMe().then(() => { refresh(); protect(); });
   const observer = new MutationObserver(refresh); observer.observe(document.getElementById('app'), { childList: true });
 })();
