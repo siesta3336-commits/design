@@ -29,6 +29,74 @@ body{background:var(--white);color:var(--ink);letter-spacing:0}
 const P=${JSON.stringify(products)};const money=n=>new Intl.NumberFormat('ko-KR').format(n)+'원';let cart=JSON.parse(localStorage.getItem('cart')||'{}');const save=()=>localStorage.setItem('cart',JSON.stringify(cart));const get=id=>P.find(p=>p.id===id);const count=()=>Object.values(cart).reduce((a,b)=>a+b,0);function header(){return '<header class="top"><a class="mark" href="#/" aria-label="전체 상품">☰</a><a class="brand" href="#/" aria-label="INU 전체 상품"><img src="/inu-mark.svg" alt=""><span>INU</span></a><div class="tools"><a href="#/cart">장바구니 ('+count()+')</a></div></header><nav class="subnav"><a href="#/">상품</a><a href="#/category/잡화">잡화</a><a href="#/category/뷰티">뷰티</a><a href="#/category/신발">신발</a><a href="#/category/식품">식품</a></nav>'}function home(cat){let list=cat?P.filter(p=>p.category===cat):P;return header()+'<div class="layout"><aside class="rail"><h3>분류</h3><button class="'+(!cat?'active':'')+'" onclick="location.hash=&quot;#/&quot;">전체 상품</button>'+['잡화','뷰티','신발','식품'].map(c=>'<button class="'+(cat===c?'active':'')+'" onclick="location.hash=&quot;#/category/'+c+'&quot;" >'+c+'</button>').join('')+'</aside><main class="main"><div class="hero"><h1>'+(cat||'상품')+'</h1><p>당신의 삶을 아름답게</p></div><div class="grid">'+list.map(card).join('')+'</div></main></div>'}function card(p){return '<article class="card"><a href="#/product/'+p.id+'"><div class="photo"><img src="'+p.image+'" alt="'+p.name+'"></div><h2>'+p.name+'</h2><p class="price">'+money(p.price)+'</p><div class="meta">'+p.category+'<br>'+p.description+'</div></a></article>'}function detail(p){let q=cart[p.id]||1;return header()+'<main class="detail"><div class="detail-photo"><img src="'+p.image+'" alt="'+p.name+'"></div><section><h1>'+p.name+'</h1><p class="desc">'+p.description+'</p><p class="big">'+money(p.price)+'</p><div class="qty"><span>수량</span><button onclick="changeQty(\\''+p.id+'\\',-1)">−</button><input id="qty" type="number" min="1" max="99" value="'+q+'" onchange="setQty(\\''+p.id+'\\',this.value)"><button onclick="changeQty(\\''+p.id+'\\',1)">＋</button></div><button class="primary" onclick="add(\\''+p.id+'\\')">장바구니 담기</button></section></main>'}function cartPage(){let rows=Object.entries(cart).filter(([,q])=>q>0);if(!rows.length)return header()+'<main class="cart"><h1>장바구니</h1><div class="items"><div class="empty">장바구니가 비어 있습니다.</div></div></main>';let total=rows.reduce((s,[id,q])=>s+get(id).price*q,0);return header()+'<main class="cart"><h1>장바구니</h1><div class="step">01 상품 선택 › <b>02 장바구니</b> › 03 주문 완료</div><div class="items">'+rows.map(([id,q])=>{let p=get(id);return '<div class="item"><input type="checkbox" checked><img src="'+p.image+'" alt="'+p.name+'"><div><h2>'+p.name+'</h2><p class="meta">'+p.description+'</p><p class="price">'+money(p.price*q)+'</p><button onclick="changeQty(\\''+id+'\\',-1)">−</button> '+q+' <button onclick="changeQty(\\''+id+'\\',1)">＋</button> <button onclick="removeItem(\\''+id+'\\')">삭제</button></div></div>'}).join('')+'</div><aside class="summary"><h2>주문 예상 금액</h2><div class="sumrow"><span>총 상품 가격</span><b>'+money(total)+'</b></div><div class="sumrow"><span>총 배송비</span><b>0원</b></div><div class="total">'+money(total)+'</div><button class="primary" onclick="order()">주문하기</button></aside></main>'}function add(id){cart[id]=Math.min(99,(cart[id]||0)+1);save();location.hash='#/cart'}function setQty(id,v){cart[id]=Math.max(1,Math.min(99,Number(v)||1));save();render()}function changeQty(id,d){setQty(id,(cart[id]||1)+d)}function removeItem(id){delete cart[id];save();render()}function order(){const n='ORD-'+Date.now().toString().slice(-8);localStorage.removeItem('cart');cart={};document.getElementById('app').innerHTML=header()+'<main class="cart"><h1>주문 완료</h1><div class="items"><div class="empty"><p>주문이 접수되었습니다.</p><p>주문 번호: '+n+'</p></div></div></main>'}function syncNav(){const path=location.hash.slice(1)||'/';document.querySelectorAll('.subnav a').forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+path))}function render(){let path=location.hash.slice(1)||'/';if(path==='/cart')app.innerHTML=cartPage();else if(path.startsWith('/product/'))app.innerHTML=detail(get(path.split('/')[2]));else app.innerHTML=home(path.startsWith('/category/')?decodeURIComponent(path.split('/')[2]):'')}window.addEventListener('hashchange',()=>{render();syncNav()});render();syncNav();
 </script></body></html>`;
 
+const textEncoder = new TextEncoder();
+const toB64 = bytes => btoa(String.fromCharCode(...bytes));
+const fromB64 = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+const toB64Url = bytes => toB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function digest(value) { return new Uint8Array(await crypto.subtle.digest('SHA-256', textEncoder.encode(value))); }
+async function hashPassword(password, salt = crypto.getRandomValues(new Uint8Array(16))) {
+  const key = await crypto.subtle.importKey('raw', textEncoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256));
+  return `pbkdf2$120000$${toB64(salt)}$${toB64(bits)}`;
+}
+async function verifyPassword(password, encoded) {
+  const [, iterations, saltText, expectedText] = String(encoded || '').split('$');
+  if (!iterations || !saltText || !expectedText) return false;
+  const actual = fromB64((await hashPassword(password, fromB64(saltText))).split('$').pop());
+  const expected = fromB64(expectedText);
+  if (actual.length !== expected.length) return false;
+  let diff = 0; for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
+  return diff === 0;
+}
+function cookies(request) { return Object.fromEntries((request.headers.get('cookie') || '').split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2)); }
+async function currentUser(request, env) {
+  if (!env.DB) return null;
+  const token = cookies(request).inu_session;
+  if (!token) return null;
+  const tokenHash = toB64Url(await digest(token));
+  const row = await env.DB.prepare("SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at > datetime('now')").bind(tokenHash).first();
+  return row || null;
+}
+async function requestJson(request) { try { return await request.json(); } catch { return null; } }
+function json(data, status = 200, headers = {}) { return Response.json(data, { status, headers }); }
+async function authApi(request, env, url) {
+  if (!env.DB) return json({ error: '데이터베이스가 연결되지 않았습니다.' }, 503);
+  const body = await requestJson(request) || {};
+  if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
+    const email = String(body.email || '').trim().toLowerCase(); const name = String(body.name || '').trim(); const password = String(body.password || '');
+    if (!email.includes('@') || !name || password.length < 8) return json({ error: '이메일, 이름과 8자 이상 비밀번호를 입력해 주세요.' }, 400);
+    try { const stored = await hashPassword(password); const result = await env.DB.prepare('INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)').bind(email, stored, name).run(); return json({ ok: true, user: { id: result.meta.last_row_id, email, name } }, 201); }
+    catch { return json({ error: '이미 가입된 이메일이거나 가입할 수 없습니다.' }, 409); }
+  }
+  if (url.pathname === '/api/auth/login' && request.method === 'POST') {
+    const email = String(body.email || '').trim().toLowerCase(); const password = String(body.password || ''); const user = await env.DB.prepare('SELECT id, email, name, password_hash FROM users WHERE email=?').bind(email).first();
+    if (!user || !(await verifyPassword(password, user.password_hash))) return json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' }, 401);
+    const token = toB64Url(crypto.getRandomValues(new Uint8Array(32))); const tokenHash = toB64Url(await digest(token));
+    await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+30 days'))").bind(tokenHash, user.id).run();
+    return json({ ok: true, user: { id: user.id, email: user.email, name: user.name } }, 200, { 'Set-Cookie': `inu_session=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000` });
+  }
+  if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+    const token = cookies(request).inu_session; if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(toB64Url(await digest(token))).run();
+    return json({ ok: true }, 200, { 'Set-Cookie': 'inu_session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0' });
+  }
+  if (url.pathname === '/api/auth/me' && request.method === 'GET') {
+    const user = await currentUser(request, env); if (!user) return json({ user: null, orders: [] });
+    const orders = await env.DB.prepare('SELECT id, total, status, created_at FROM orders WHERE user_id=? ORDER BY created_at DESC').bind(user.id).all();
+    return json({ user, orders: orders.results });
+  }
+  return json({ error: '지원하지 않는 요청입니다.' }, 404);
+}
+async function orderApi(request, env) {
+  const user = await currentUser(request, env); if (!user) return json({ error: '로그인이 필요합니다.' }, 401);
+  const body = await requestJson(request) || {}; const items = Array.isArray(body.items) ? body.items : [];
+  if (!items.length || items.length > 99) return json({ error: '주문할 상품이 없습니다.' }, 400);
+  const normalized = items.map(i => ({ id: String(i.product_id || ''), qty: Math.max(1, Math.min(99, Number(i.qty) || 0)) })).filter(i => i.id && i.qty);
+  const rows = []; for (const item of normalized) { const product = await env.DB.prepare('SELECT id, price FROM products WHERE id=?').bind(item.id).first(); if (!product) return json({ error: '존재하지 않는 상품입니다.' }, 400); rows.push({ ...item, price: product.price }); }
+  const total = rows.reduce((sum, item) => sum + item.price * item.qty, 0); const orderId = `ORD-${crypto.randomUUID()}`;
+  await env.DB.batch([env.DB.prepare("INSERT INTO orders (id, user_id, total, status) VALUES (?, ?, ?, 'pending')").bind(orderId, user.id, total), ...rows.map(item => env.DB.prepare('INSERT INTO order_items (order_id, product_id, qty, price) VALUES (?, ?, ?, ?)').bind(orderId, item.id, item.qty, item.price))]);
+  return json({ ok: true, order: { id: orderId, total, status: 'pending' } }, 201);
+}
+
 async function productsFromD1(env) {
   if (!env.DB) return products;
   await env.DB.batch(products.map(p => env.DB.prepare('INSERT OR IGNORE INTO products (id, name, price, description, category_id, image_url) VALUES (?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?)').bind(p.id, p.name, p.price, p.description, p.category, p.image)));
@@ -36,4 +104,4 @@ async function productsFromD1(env) {
   return result.results;
 }
 
-export default { async fetch(request, env) { const url = new URL(request.url); const isAsset = /\.(?:svg|png|jpg|jpeg|webp|gif)$/i.test(url.pathname); if (isAsset && env.ASSETS) return env.ASSETS.fetch(request); if (url.pathname === '/api/products') { try { return Response.json(await productsFromD1(env), { headers: { 'cache-control': 'no-store' } }); } catch (error) { return Response.json({ error: '상품 데이터를 불러오지 못했습니다.' }, { status: 500 }); } } try { const dbProducts = await productsFromD1(env); const dbHtml = html.replace(JSON.stringify(products), JSON.stringify(dbProducts)); return new Response(dbHtml, { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } catch (error) { return new Response(html, { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } } };
+export default { async fetch(request, env) { const url = new URL(request.url); const isAsset = /\.(?:svg|png|jpg|jpeg|webp|gif)$/i.test(url.pathname); if (isAsset && env.ASSETS) return env.ASSETS.fetch(request); if (url.pathname.startsWith('/api/auth/')) return authApi(request, env, url); if (url.pathname === '/api/orders' && request.method === 'POST') return orderApi(request, env); if (url.pathname === '/api/products') { try { return Response.json(await productsFromD1(env), { headers: { 'cache-control': 'no-store' } }); } catch (error) { return Response.json({ error: '상품 데이터를 불러오지 못했습니다.' }, { status: 500 }); } } try { const dbProducts = await productsFromD1(env); const dbHtml = html.replace(JSON.stringify(products), JSON.stringify(dbProducts)); return new Response(dbHtml.replace('</body>', '<script src="/app.js"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } catch (error) { return new Response(html.replace('</body>', '<script src="/app.js"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } } };
