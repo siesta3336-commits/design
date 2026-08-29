@@ -3,5 +3,13 @@
   "name": "korean-shop",
   "main": "src/index.js",
   "compatibility_date": "2026-08-29",
-  "assets": { "directory": "./public" }
+  "assets": { "directory": "./public" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "korean-shop-db",
+      "database_id": "23e5c156-c433-4217-8470-707fd286b490",
+      "migrations_dir": "./migrations"
+    }
+  ]
 }
