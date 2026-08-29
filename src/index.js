@@ -48,7 +48,7 @@ async function verifyPassword(password, encoded) {
   let diff = 0; for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
   return diff === 0;
 }
-function cookies(request) { return Object.fromEntries((request.headers.get('cookie') || '').split(';').map(v => v.trim().split('=').map(decodeURIComponent)).filter(v => v.length === 2)); }
+function cookies(request) { const result = {}; for (const part of (request.headers.get('cookie') || '').split(';')) { const [rawName, ...rawValue] = part.trim().split('='); if (!rawName || !rawValue.length) continue; try { result[decodeURIComponent(rawName)] = decodeURIComponent(rawValue.join('=')); } catch {} } return result; }
 async function currentUser(request, env) {
   if (!env.DB) return null;
   const token = cookies(request).inu_session;
@@ -77,7 +77,7 @@ async function authApi(request, env, url) {
   const body = await requestJson(request) || {};
   if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase(); const name = String(body.name || '').trim(); const password = String(body.password || '');
-    if (!email.includes('@') || !name || password.length < 8) return json({ error: '이메일, 이름과 8자 이상 비밀번호를 입력해 주세요.' }, 400);
+    if (!email.includes('@') || email.length > 254 || !name || name.length > 80 || password.length < 8 || password.length > 128) return json({ error: '이메일·이름·비밀번호 형식을 확인해 주세요.' }, 400);
     try { const stored = await hashPassword(password); const result = await env.DB.prepare('INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)').bind(email, stored, name).run(); return json({ ok: true, user: { id: result.meta.last_row_id, email, name } }, 201); }
     catch (error) { console.error('signup failed', error); const duplicate = String(error && error.message).toUpperCase().includes('UNIQUE'); return json({ error: duplicate ? '이미 가입된 이메일입니다.' : '회원가입 처리 중 오류가 발생했습니다.' }, duplicate ? 409 : 500); }
   }
@@ -106,7 +106,8 @@ async function orderApi(request, env) {
   const user = await currentUser(request, env); if (!user) return json({ error: '로그인이 필요합니다.' }, 401);
   const body = await requestJson(request) || {}; const items = Array.isArray(body.items) ? body.items : [];
   if (!items.length || items.length > 99) return json({ error: '주문할 상품이 없습니다.' }, 400);
-  const normalized = items.map(i => ({ id: String(i.product_id || ''), qty: Math.max(1, Math.min(99, Number(i.qty) || 0)) })).filter(i => i.id && i.qty);
+  const normalized = items.map(i => { const id = String(i.product_id || '').trim(); const qty = Number(i.qty); return { id, qty, valid: /^[A-Za-z0-9_-]{1,80}$/.test(id) && Number.isInteger(qty) && qty >= 1 && qty <= 99 }; });
+  if (normalized.some(i => !i.valid)) return json({ error: '상품 번호 또는 수량이 올바르지 않습니다.' }, 400);
   const rows = []; for (const item of normalized) { const product = await env.DB.prepare('SELECT id, price FROM products WHERE id=?').bind(item.id).first(); if (!product) return json({ error: '존재하지 않는 상품입니다.' }, 400); rows.push({ ...item, price: product.price }); }
   const total = rows.reduce((sum, item) => sum + item.price * item.qty, 0); const orderId = `ORD-${crypto.randomUUID()}`;
   await env.DB.batch([env.DB.prepare("INSERT INTO orders (id, user_id, total, status) VALUES (?, ?, ?, 'pending')").bind(orderId, user.id, total), ...rows.map(item => env.DB.prepare('INSERT INTO order_items (order_id, product_id, qty, price) VALUES (?, ?, ?, ?)').bind(orderId, item.id, item.qty, item.price))]);
@@ -117,7 +118,7 @@ async function paymentConfirmApi(request, env) {
   const user = await currentUser(request, env); if (!user) return json({ error: '로그인이 필요합니다.' }, 401);
   if (!env.TOSS_SECRET_KEY) return json({ error: '결제 설정이 완료되지 않았습니다.' }, 503);
   const body = await requestJson(request) || {}; const paymentKey = String(body.paymentKey || ''); const orderId = String(body.orderId || ''); const amount = Number(body.amount);
-  if (!paymentKey || !orderId || !Number.isInteger(amount) || amount < 0) return json({ error: '결제 정보가 올바르지 않습니다.' }, 400);
+  if (!paymentKey || paymentKey.length > 200 || !/^[A-Za-z0-9_-]{6,64}$/.test(orderId) || !Number.isInteger(amount) || amount < 0) return json({ error: '결제 정보가 올바르지 않습니다.' }, 400);
   const order = await env.DB.prepare('SELECT id, total, status FROM orders WHERE id=? AND user_id=?').bind(orderId, user.id).first();
   if (!order) return json({ error: '주문을 찾을 수 없습니다.' }, 404);
   if (order.status === 'paid') return json({ error: '이미 결제 완료된 주문입니다.' }, 409);
