@@ -31,8 +31,8 @@ const P=${JSON.stringify(products)};const money=n=>new Intl.NumberFormat('ko-KR'
 
 async function productsFromD1(env) {
   if (!env.DB) return products;
-  await env.DB.batch(products.map(p => env.DB.prepare('INSERT OR IGNORE INTO products (id, name, price, description, category, image_url) VALUES (?, ?, ?, ?, ?, ?)').bind(p.id, p.name, p.price, p.description, p.category, p.image)));
-  const result = await env.DB.prepare('SELECT id, name, price, description, category, image_url AS image FROM products ORDER BY rowid').all();
+  await env.DB.batch(products.map(p => env.DB.prepare('INSERT OR IGNORE INTO products (id, name, price, description, category_id, image_url) VALUES (?, ?, ?, ?, (SELECT id FROM categories WHERE name = ?), ?)').bind(p.id, p.name, p.price, p.description, p.category, p.image)));
+  const result = await env.DB.prepare('SELECT p.id, p.name, p.price, p.description, c.name AS category, p.image_url AS image FROM products p JOIN categories c ON c.id = p.category_id ORDER BY p.rowid').all();
   return result.results;
 }
 
