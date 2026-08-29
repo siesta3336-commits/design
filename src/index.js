@@ -82,7 +82,10 @@ async function authApi(request, env, url) {
   if (url.pathname === '/api/auth/me' && request.method === 'GET') {
     const user = await currentUser(request, env); if (!user) return json({ user: null, orders: [] });
     const orders = await env.DB.prepare('SELECT id, total, status, created_at FROM orders WHERE user_id=? ORDER BY created_at DESC').bind(user.id).all();
-    return json({ user, orders: orders.results });
+    const items = await env.DB.prepare('SELECT oi.order_id, oi.product_id, oi.qty, oi.price, p.name, p.image_url AS image FROM order_items oi JOIN orders o ON o.id=oi.order_id JOIN products p ON p.id=oi.product_id WHERE o.user_id=? ORDER BY oi.id').bind(user.id).all();
+    const byOrder = Object.fromEntries(orders.results.map(order => [order.id, { ...order, items: [] }]));
+    for (const item of items.results) byOrder[item.order_id]?.items.push(item);
+    return json({ user, orders: Object.values(byOrder) });
   }
   return json({ error: '지원하지 않는 요청입니다.' }, 404);
 }
@@ -104,4 +107,4 @@ async function productsFromD1(env) {
   return result.results;
 }
 
-export default { async fetch(request, env) { const url = new URL(request.url); const isAsset = /\.(?:svg|png|jpg|jpeg|webp|gif)$/i.test(url.pathname); if (isAsset && env.ASSETS) return env.ASSETS.fetch(request); if (url.pathname.startsWith('/api/auth/')) return authApi(request, env, url); if (url.pathname === '/api/orders' && request.method === 'POST') return orderApi(request, env); if (url.pathname === '/api/products') { try { return Response.json(await productsFromD1(env), { headers: { 'cache-control': 'no-store' } }); } catch (error) { return Response.json({ error: '상품 데이터를 불러오지 못했습니다.' }, { status: 500 }); } } try { const dbProducts = await productsFromD1(env); const dbHtml = html.replace(JSON.stringify(products), JSON.stringify(dbProducts)); return new Response(dbHtml.replace('</body>', '<script src="/app.js?v=3"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } catch (error) { return new Response(html.replace('</body>', '<script src="/app.js?v=3"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } } };
+export default { async fetch(request, env) { const url = new URL(request.url); const isAsset = /\.(?:svg|png|jpg|jpeg|webp|gif)$/i.test(url.pathname); if (isAsset && env.ASSETS) return env.ASSETS.fetch(request); if (url.pathname.startsWith('/api/auth/')) return authApi(request, env, url); if (url.pathname === '/api/orders' && request.method === 'POST') return orderApi(request, env); if (url.pathname === '/api/products') { try { return Response.json(await productsFromD1(env), { headers: { 'cache-control': 'no-store' } }); } catch (error) { return Response.json({ error: '상품 데이터를 불러오지 못했습니다.' }, { status: 500 }); } } try { const dbProducts = await productsFromD1(env); const dbHtml = html.replace(JSON.stringify(products), JSON.stringify(dbProducts)); return new Response(dbHtml.replace('</body>', '<script src="/app.js?v=4"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } catch (error) { return new Response(html.replace('</body>', '<script src="/app.js?v=4"></script></body>'), { headers: { 'content-type': 'text/html; charset=UTF-8' } }); } } };
