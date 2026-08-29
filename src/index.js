@@ -70,8 +70,8 @@ async function englishDescriptionApi(request, env) {
 }
 async function authApi(request, env, url) {
   if (!env.DB) return json({ error: '데이터베이스가 연결되지 않았습니다.' }, 503);
-  const body = await requestJson(request) || {};
   if (url.pathname === '/api/auth/english' && request.method === 'POST') return englishDescriptionApi(request, env);
+  const body = await requestJson(request) || {};
   if (url.pathname === '/api/auth/signup' && request.method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase(); const name = String(body.name || '').trim(); const password = String(body.password || '');
     if (!email.includes('@') || !name || password.length < 8) return json({ error: '이메일, 이름과 8자 이상 비밀번호를 입력해 주세요.' }, 400);
