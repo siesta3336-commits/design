@@ -64,8 +64,11 @@ async function englishDescriptionApi(request, env) {
   const body = await requestJson(request) || {}; const name = String(body.name || '').trim(); const description = String(body.description || '').trim();
   if (!name || !description || name.length > 200 || description.length > 1000) return json({ error: '상품 정보가 올바르지 않습니다.' }, 400);
   try {
-    const result = await env.AI.run('@cf/meta/llama-3.2-3b-instruct', { prompt: `Write a natural English product introduction in no more than 2 short sentences (35 words maximum) for international shoppers. Do not invent any facts. Use only this information.\n\nProduct name: ${name}\nDescription: ${description}`, max_tokens: 70, temperature: 0.6 });
-    const text = String(result?.response || '').replace(/\s*\n\s*/g, ' ').trim(); if (!text) throw new Error('empty Workers AI response'); return json({ description: text });
+    const prompt = `IMPORTANT: Respond in ENGLISH ONLY. Never use Korean, Hangul, translation notes, labels, or markdown. Write no more than 2 short sentences (35 words maximum) for international shoppers. Do not invent facts; use only the supplied product information.\n\nProduct name: ${name}\nDescription: ${description}`;
+    let result = await env.AI.run('@cf/meta/llama-3.2-3b-instruct', { prompt, max_tokens: 70, temperature: 0.4 });
+    let text = String(result?.response || '').replace(/\s*\n\s*/g, ' ').trim();
+    if (/[\uAC00-\uD7A3]/.test(text)) { result = await env.AI.run('@cf/meta/llama-3.2-3b-instruct', { prompt: `ENGLISH ONLY. Rewrite this product introduction using English only, in 2 short sentences maximum:\n${text}`, max_tokens: 60, temperature: 0.2 }); text = String(result?.response || '').replace(/[\uAC00-\uD7A3]/g, '').replace(/\s+/g, ' ').trim(); }
+    if (!text) throw new Error('empty Workers AI response'); return json({ description: text });
   } catch (error) { console.error('Workers AI error', error); return json({ error: '영어 상품 소개를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.' }, 502); }
 }
 async function authApi(request, env, url) {
