@@ -1,12 +1,12 @@
 const products = [
-  { id: 'bag', name: '미니멀 토트백', price: 89000, category: '잡화', description: '각을 살린 검정 가죽 토트백', image: '/products/bag.jpg' },
-  { id: 'watch', name: '클래식 손목시계', price: 145000, category: '잡화', description: '흰 문자판에 검정 가죽 밴드', image: '/products/watch.jpg' },
-  { id: 'perfume', name: '시트러스 오드뚜왈렛', price: 78000, category: '뷰티', description: '상쾌한 시트러스 계열 향수', image: '/products/perfume.jpg' },
-  { id: 'lipstick', name: '매트 레드 립스틱', price: 32000, category: '뷰티', description: '발색이 선명한 매트 타입', image: '/products/lipstick.jpg' },
-  { id: 'shoe', name: '러닝화 블루', price: 112000, category: '신발', description: '쿠션이 두꺼운 남성 러닝화', image: '/products/shoe.jpg' },
-  { id: 'shoe2', name: '러닝화 핑크', price: 112000, category: '신발', description: '같은 모델의 여성 러닝화', image: '/products/shoe2.jpg' },
-  { id: 'wine', name: '레드와인 피노타지', price: 42000, category: '식품', description: '남아프리카산 드라이 레드와인', image: '/products/wine.jpg' },
-  { id: 'pasta', name: '이탈리아 파스타 면', price: 6500, category: '식품', description: '세몰리나 100% 숏 파스타 450g', image: '/products/pasta.jpg' }
+  { id: 'bag', name: '미니멀 토트백', price: 89000, category: '잡화', description: '각을 살린 검정 가죽 토트백', image: '/products/bag.png' },
+  { id: 'watch', name: '클래식 손목시계', price: 145000, category: '잡화', description: '흰 문자판에 검정 가죽 밴드', image: '/products/watch.png' },
+  { id: 'perfume', name: '시트러스 오드뚜왈렛', price: 78000, category: '뷰티', description: '상쾌한 시트러스 계열 향수', image: '/products/perfume.png' },
+  { id: 'lipstick', name: '매트 레드 립스틱', price: 32000, category: '뷰티', description: '발색이 선명한 매트 타입', image: '/products/lipstick.png' },
+  { id: 'shoe', name: '러닝화 블루', price: 112000, category: '신발', description: '쿠션이 두꺼운 남성 러닝화', image: '/products/shoe.png' },
+  { id: 'shoe2', name: '러닝화 핑크', price: 112000, category: '신발', description: '같은 모델의 여성 러닝화', image: '/products/shoe2.png' },
+  { id: 'wine', name: '레드와인 피노타지', price: 42000, category: '식품', description: '남아프리카산 드라이 레드와인', image: '/products/wine.png' },
+  { id: 'pasta', name: '이탈리아 파스타 면', price: 6500, category: '식품', description: '세몰리나 100% 숏 파스타 450g', image: '/products/pasta.png' }
 ];
 
 const html = `<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>상품</title><style>
