@@ -30,20 +30,20 @@ const P=${JSON.stringify(products)};const money=n=>new Intl.NumberFormat('ko-KR'
 </script></body></html>`;
 
 const textEncoder = new TextEncoder();
-const toB64 = bytes => btoa(String.fromCharCode(...bytes));
-const fromB64 = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
-const toB64Url = bytes => toB64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const toHex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+const fromHex = value => Uint8Array.from(String(value).match(/.{2}/g) || [], pair => parseInt(pair, 16));
+const toToken = bytes => toHex(bytes);
 async function digest(value) { return new Uint8Array(await crypto.subtle.digest('SHA-256', textEncoder.encode(value))); }
 async function hashPassword(password, salt = crypto.getRandomValues(new Uint8Array(16))) {
   const key = await crypto.subtle.importKey('raw', textEncoder.encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256));
-  return `pbkdf2$120000$${toB64(salt)}$${toB64(bits)}`;
+  return `pbkdf2$120000$${toHex(salt)}$${toHex(bits)}`;
 }
 async function verifyPassword(password, encoded) {
   const [, iterations, saltText, expectedText] = String(encoded || '').split('$');
   if (!iterations || !saltText || !expectedText) return false;
-  const actual = fromB64((await hashPassword(password, fromB64(saltText))).split('$').pop());
-  const expected = fromB64(expectedText);
+  const actual = fromHex((await hashPassword(password, fromHex(saltText))).split('$').pop());
+  const expected = fromHex(expectedText);
   if (actual.length !== expected.length) return false;
   let diff = 0; for (let i = 0; i < actual.length; i++) diff |= actual[i] ^ expected[i];
   return diff === 0;
@@ -53,7 +53,7 @@ async function currentUser(request, env) {
   if (!env.DB) return null;
   const token = cookies(request).inu_session;
   if (!token) return null;
-  const tokenHash = toB64Url(await digest(token));
+  const tokenHash = toToken(await digest(token));
   const row = await env.DB.prepare("SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at > datetime('now')").bind(tokenHash).first();
   return row || null;
 }
@@ -71,12 +71,12 @@ async function authApi(request, env, url) {
   if (url.pathname === '/api/auth/login' && request.method === 'POST') {
     const email = String(body.email || '').trim().toLowerCase(); const password = String(body.password || ''); const user = await env.DB.prepare('SELECT id, email, name, password_hash FROM users WHERE email=?').bind(email).first();
     if (!user || !(await verifyPassword(password, user.password_hash))) return json({ error: '이메일 또는 비밀번호가 올바르지 않습니다.' }, 401);
-    const token = toB64Url(crypto.getRandomValues(new Uint8Array(32))); const tokenHash = toB64Url(await digest(token));
+    const token = toToken(crypto.getRandomValues(new Uint8Array(32))); const tokenHash = toToken(await digest(token));
     await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', '+30 days'))").bind(tokenHash, user.id).run();
     return json({ ok: true, user: { id: user.id, email: user.email, name: user.name } }, 200, { 'Set-Cookie': `inu_session=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000` });
   }
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
-    const token = cookies(request).inu_session; if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(toB64Url(await digest(token))).run();
+    const token = cookies(request).inu_session; if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(toToken(await digest(token))).run();
     return json({ ok: true }, 200, { 'Set-Cookie': 'inu_session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0' });
   }
   if (url.pathname === '/api/auth/me' && request.method === 'GET') {
